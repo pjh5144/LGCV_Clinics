@@ -26,7 +26,10 @@ encs<-encs%>%
 #Create Clinic Frequencies Post-mTBI 
 clinics<-encs%>%
   filter(enc_flag=="Post")%>%
-  mutate(Mon_Flag = floor(daydiff/30))%>%
+  mutate(Mon_Flag_raw = daydiff/30)%>%
+  mutate(Mon_Flag = floor(Mon_Flag_raw))%>%
+  #mutate(Mon_Flag = ceiling(Mon_Flag_raw))%>%
+  filter(Mon_Flag<12)%>%
   group_by(pseudo_personid,Mon_Flag,prodline)%>%
   summarise(n=n())
 

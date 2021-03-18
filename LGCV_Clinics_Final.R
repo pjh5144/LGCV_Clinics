@@ -1,30 +1,26 @@
-#2.3.21
+#Finalized LGCV For Clinic Utilization Following mTBI
+#3.17.21
 
-#Begin exploration of LGCM with distributions and functions 
-#source("PreProcess.R")
-
+source("PreProcess.R")
 
 library(ggplot2)
 
 #Subset data for quick modeling
 set.seed(111)
- 
 sam<-sample(unique(clinic_cnts$pseudo_personid),1000) #Sample population for testing 
-
 sample_df<-clinic_cnts%>%
   filter(pseudo_personid %in% sam)
 
 #sample_df<-clinic_cnts #whole population
 
-
 sample_df$Mon_Flag<-as.numeric(sample_df$Mon_Flag)
 
 #Quick graph of distribution
-ggplot(sample_df,aes(x=n))+geom_histogram()+facet_wrap(~prodline)
+#ggplot(sample_df,aes(x=n))+geom_histogram()+facet_wrap(~prodline)
 
-sample_df%>%
-  group_by(prodline,Mon_Flag)%>%summarise(mean=mean(n),med=median(n),sd=sd(n)^2)%>%
-  head()
+#sample_df%>%
+#  group_by(prodline,Mon_Flag)%>%summarise(mean=mean(n),med=median(n),sd=sd(n)^2)%>%
+#  head()
 
 #######################
 ###Model Evaluations###
@@ -48,13 +44,10 @@ nb=FLXMRnegbin()
 
 models<-c(FLXMRglm(family="poisson"),FLXMRziglm(family = "poisson"),nb=FLXMRnegbin())
 models<-c(FLXMRglm(family="poisson"),FLXMRziglm(family = "poisson"),FLXMRnegbin(),zinb)#set models to test 
-#models<-c(FLXMRglm(family="poisson",random=~1),FLXMRziglm(family = "poisson",random=~1),nb=FLXMRnegbin(random=~1))#set models to test 
-#models<-c(FLXMRglm(family="poisson",fixed=~Age+Gender),FLXMRziglm(family = "poisson",fixed=~Age+Gender),nb=FLXMRnegbin(fixed=~Age+Gender))#set models to test 
 
 m0<-flexmix(n~Mon_Flag|pseudo_personid,data=sample_df,model=models[1],k=2)
 
 m1<-flexmix(n~Mon_Flag|pseudo_personid,data=sample_df,model=models[2],k=2)
-
 
 table(m0@cluster)
 
@@ -169,30 +162,34 @@ class_ass%>%
   mutate(prop=n/sum(n))
 
 
-zip_model1new<-stepFlexmix(n~prodline+Mon_Flag|pseudo_personid,data=sample_df,model=zip,k=2:7)
-getModel(zip_model1new)@components
-getModel(zip_model1new)
+
+nb_model2<-stepFlexmix(count~variable+Time|PersonID,data=sample_df,model=nb,k=2:7,control=list(minprior=0,classify="hard"))
 
 
-class_ass<-cbind(sample_df,getModel(zip_model1new)@cluster)
-class_ass%>%
-  distinct(pseudo_personid,`getModel(zip_model1new)@cluster`)%>%
-  group_by(`getModel(zip_model1new)@cluster`)%>%
-  summarise(n=n())%>%
-  mutate(prop=n/sum(n))
-
-
-p_model1new<-stepFlexmix(n~prodline+Mon_Flag|pseudo_personid,data=sample_df,model=FLXMRglm(family="poisson"),k=2:7)
-getModel(p_model1new)@components
-getModel(p_model1new)
-BIC(getModel(p_model1new))
-
-class_ass<-cbind(sample_df,getModel(p_model1new)@cluster)
-class_ass%>%
-  distinct(pseudo_personid,`getModel(p_model1new)@cluster`)%>%
-  group_by(`getModel(p_model1new)@cluster`)%>%
-  summarise(n=n())%>%
-  mutate(prop=n/sum(n))
+# zip_model1new<-stepFlexmix(n~prodline+Mon_Flag|pseudo_personid,data=sample_df,model=zip,k=2:7)
+# getModel(zip_model1new)@components
+# getModel(zip_model1new)
+# 
+# 
+# class_ass<-cbind(sample_df,getModel(zip_model1new)@cluster)
+# class_ass%>%
+#   distinct(pseudo_personid,`getModel(zip_model1new)@cluster`)%>%
+#   group_by(`getModel(zip_model1new)@cluster`)%>%
+#   summarise(n=n())%>%
+#   mutate(prop=n/sum(n))
+# 
+# 
+# p_model1new<-stepFlexmix(n~prodline+Mon_Flag|pseudo_personid,data=sample_df,model=FLXMRglm(family="poisson"),k=2:7)
+# getModel(p_model1new)@components
+# getModel(p_model1new)
+# BIC(getModel(p_model1new))
+# 
+# class_ass<-cbind(sample_df,getModel(p_model1new)@cluster)
+# class_ass%>%
+#   distinct(pseudo_personid,`getModel(p_model1new)@cluster`)%>%
+#   group_by(`getModel(p_model1new)@cluster`)%>%
+#   summarise(n=n())%>%
+#   mutate(prop=n/sum(n))
 
 
 
