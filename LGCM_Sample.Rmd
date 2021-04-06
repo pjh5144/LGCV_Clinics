@@ -1,0 +1,315 @@
+---
+title: "Latent Growth Curve Models"
+author: "P. Hoover"
+date: "Apri 1, 2021"
+output: 
+  html_document:
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+
+```{r}
+#Libraries
+library(tidyverse)
+library(flexmix)
+library(ggplot2)
+library(kableExtra)
+
+#Previous script
+source("PreProcess.R")
+
+#Data
+#Patient with tbi 2016-2017, initial mtbi, no susbsequent tbi, no person hx tbi, and HC utilization > and < 365 from index date 
+pts<-data.table::fread("/Users/peterhoover/Documents/Analysis_Projects/Global_data/cost/clean/perPatientTotals_proj.csv")
+
+#Load previous model
+load("nb_model1.rda")
+
+#Old class assignments with sample patients 
+class_ass<-read.csv(file="class_assignments.csv")
+```
+
+# Sample Dataset
+
+1. First diagnosis of mTBI
+
+2. Verify no more severe dx within year following
+
+3. Verify health care utilization 
+
+4. Obtain all DC encounters within 1 year either side of mTBI 
+
+## Objective
+
+* Evaluate changes in health care utilization as a result of the mTBI 
+
+  + Overall changes in total encounters
+
+  + Changes in type of encounters
+
+  + Identify high utilizers 
+
+
+# Examine Change in Encounters {.tabset}
+
+## Frequency 
+
+* Increase directly following mTBI and a gradual reduction
+
+```{r}
+ggplot(encs,aes(x=daydiff))+geom_histogram(bins=50)+ggtitle("Histogram of Encounters wrt Index Date")
+```
+
+## Overall
+
+* 86.54% Increase in overall utilization
+
+* Increase in 7.7 average encounters, median increase of 4
+
+```{r}
+encs<-encs%>%
+  mutate(enc_flag=factor(enc_flag,ordered=T,levels=c("Pre","Post")))
+
+enc_cnts<-encs%>%
+  group_by(enc_flag)%>%
+  summarise(n=n())
+
+enc_sum<-pts%>%
+  select(pseudo_personid,n_Post,n_Pre)%>%
+  reshape2::melt(id.var="pseudo_personid")%>%
+  group_by(variable)%>%
+  summarise(mean=mean(value),med=median(value))%>%
+  mutate(variable=factor(variable,levels=c("n_Pre","n_Post"),ordered=T))
+
+gridExtra::grid.arrange(ggplot(enc_cnts,aes(x=enc_flag,y=n))+geom_bar(stat='identity')+ggtitle("Total Number of Encounters"),
+ggplot(enc_sum,aes(x=variable,y=mean))+geom_bar(stat='identity')+ggtitle("Mean (Med) Number of Encounters")+geom_point(aes(y=med)),ncol=2)
+```
+
+# Following Injury Summarization {.tabset}
+
+## Encounter Overall
+
+```{r}
+mon_sum<-encs%>%
+  filter(enc_flag=="Post")%>%
+  mutate(Mon_Flag_raw = daydiff/30)%>%
+  mutate(Mon_Flag = floor(Mon_Flag_raw))%>%
+  #mutate(Mon_Flag = ceiling(Mon_Flag_raw))%>%
+  filter(Mon_Flag<12)%>%
+  group_by(pseudo_personid,Mon_Flag)%>%
+  summarise(n=n())
+
+mon_sum_cnts<-expand.grid(pseudo_personid=unique(pts$pseudo_personid),Mon_Flag=unique(mon_sum$Mon_Flag))
+
+mon_sum_cnts<-left_join(mon_sum_cnts,mon_sum,by=c("pseudo_personid","Mon_Flag"))
+
+mon_sum_cnts$n[is.na(mon_sum_cnts$n)]<-0
+
+mon_sum_sums<-mon_sum_cnts%>%
+  group_by(Mon_Flag)%>%
+  summarise(mean=mean(n),med=median(n))
+
+ggplot(mon_sum_sums,aes(x=Mon_Flag,y=mean))+geom_bar(stat='identity')+ggtitle("Mean (Med) Number of Encounters")+geom_point(aes(y=med))
+```
+
+## Encounters per Clinic
+
+```{r}
+clinic_sums<-clinic_cnts%>%
+  group_by(Mon_Flag,prodline)%>%
+  summarise(mean=mean(n),med=median(n))
+
+ggplot(clinic_sums,aes(x=Mon_Flag,y=mean))+geom_bar(stat='identity')+ggtitle("Mean (Med) Number of Encounters")+geom_point(aes(y=med))+facet_wrap(~prodline)
+```
+
+# Summary
+
+* Population level, provides nice overview of how encounters change 
+
+  + What/Where are the clinic demands?
+
+  + What can we expect patients to utilize?
+    
+   + e.g., Expect the average patient to have 20.4 encounters following injury
+
+* This also assumes that all patients are generally equal
+
+  + Subset of patients that are high utilizers of MH services
+
+
+***
+
+# Latent Growth Curve Models
+
+* Longitudinal analysis technique to estimate growth over a period of time
+
+* Frequently used in social sciences, examining changes in traits
+
+* Considers change time in terms of an underlying, latent process
+
+* More flexible than multilevel modeling or repeated ANOVA
+
+  + Inclusion of additional predictors (e.g., demographics, types of outcomes)
+
+
+## Objective
+
++ Identify latent groups of HC utilization within the year following mTBI
+
++ For each patient, calculated total number of encounters per ProdLine (clinic) each month following injury
+
+
+## LGCM - Procedures
+
+1. Evaluate distribution fit
+  + Gaussian, Poisson, NB, Zero-Inflated, etc.
+
+2. Determine growth parameters
+  + Linear, polynomial
+
+3. Estimate latent groups
+  + k latent groups (2-7)
+
+  + E-M: For each k, iteratively obtain parameter estimates and posterior estimates of patient class membership in each k-group to maximize likelihood of the data give the model parameters 
+  
+  + Obtain solution for best fitting parameters to meet the number of estimated latent groups 
+
+4. Further include other predictors (demographics, etc.)
+
+
+## Model Summaries
+
+```{r}
+nb_model1
+```
+# Model Estimates
+
+```{r}
+getModel(nb_model1)@components
+
+```
+
+# Evaluate Number of Patients per Group
+
+```{r}
+set.seed(111)
+sam<-sample(unique(clinic_cnts$pseudo_personid),1000) #Sample population for testing 
+sample_df<-clinic_cnts%>%
+  filter(pseudo_personid %in% sam)
+
+#sample_df<-clinic_cnts #whole population
+
+sample_df$Mon_Flag<-as.numeric(sample_df$Mon_Flag)
+
+class_ass<-cbind(sample_df,getModel(nb_model1)@cluster)
+
+class_ass%>%
+  distinct(pseudo_personid,`getModel(nb_model1)@cluster`)%>%
+  group_by(`getModel(nb_model1)@cluster`)%>%
+  summarise(n=n())%>%
+  mutate(prop=n/sum(n)*100)%>%
+  kable()%>%kable_styling(full_width=F)
+```
+
+# Explore How Utilization Changes 
+
+```{r,fig.width = 10, fig.height = 10}
+names(class_ass)[5]<-"cluster"
+class_sum<-class_ass%>%
+  ungroup()%>%
+  group_by(prodline,Mon_Flag,cluster)%>%
+  summarise(min=min(n),max=max(n),mean=mean(n),med=median(n))
+
+ggplot(class_sum,aes(x=Mon_Flag,y=mean))+
+  geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
+  geom_line(aes(color=as.factor(cluster)))
+
+# ggplot(class_sum,aes(x=Mon_Flag,y=med))+
+#   geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
+#   geom_line(aes(color=as.factor(cluster)))
+
+```
+
+# Compare Demographics {.tabset}
+
+## Gender
+
+```{r}
+class_distinct<-class_ass%>%
+  distinct(pseudo_personid,cluster)
+
+pts_final<-pts%>%
+  select(pseudo_personid,gender,ethnicity,age,sponservice)%>%
+  inner_join(class_distinct,by="pseudo_personid")%>%
+  mutate(sponservice=case_when(sponservice==""~"X",
+                               TRUE ~ paste(sponservice)))
+
+#Gender
+pts_final%>%
+  group_by(cluster,gender)%>%
+  summarise(n=n())%>%
+  mutate(Prop=round(n/sum(n)*100,2))%>%
+  reshape2::dcast(gender~cluster,value.var="Prop")%>%
+  kable()%>%kable_styling(full_width=F)
+
+#prop.test(table(pts_final$cluster,pts_final$gender))
+```
+
+## Age
+
+```{r}
+#Age
+
+pts_final%>%
+  group_by(cluster)%>%
+  summarise(min=round(min(age),2),mean=round(mean(age),2),max=round(max(age),1))%>%
+  kable()%>%kable_styling(full_width=F)
+
+#aov_1<-aov(age~as.factor(cluster),data=pts_final)
+#summary(aov_1)
+#TukeyHSD(aov_1)
+```
+
+## Race
+
+```{r}
+#Ethnicity
+
+pts_final%>%
+  group_by(cluster,ethnicity)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  #group_by(ethnicity)%>%
+  mutate(Prop=round(n/sum(n)*100,2))%>%
+  reshape2::dcast(ethnicity~cluster,value.var="Prop")%>%
+  kable()%>%kable_styling(full_width=F)
+
+#prop.test(table(pts_final$cluster,pts_final$ethnicity))
+
+```
+
+## BoS
+
+```{r}
+#BoS
+
+pts_final%>%
+  group_by(cluster,sponservice)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  #group_by(sponservice)%>%
+  mutate(Prop=round(n/sum(n)*100,2))%>%
+  reshape2::dcast(sponservice~cluster,value.var="Prop")%>%
+  kable()%>%kable_styling(full_width=F)
+
+```
+

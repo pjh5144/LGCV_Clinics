@@ -222,15 +222,82 @@ getModel(nb_model1new2)
 plot(ICL(nb_model1new2))
 
 
+###############################
+### Final Class Comparisons ###
+###############################
 
-test<-class_ass%>%
-  group_by(prodline,Mon_Flag,`getModel(nb_model1)@cluster`)%>%
+names(class_ass)[5]<-"cluster"
+class_sum<-class_ass%>%
+  group_by(prodline,Mon_Flag,cluster)%>%
   summarise(min=min(n),max=max(n),mean=mean(n),med=median(n))
 
-names(test)[3]<-"cluster"
-ggplot(test,aes(x=Mon_Flag,y=mean))+
+ggplot(class_sum,aes(x=Mon_Flag,y=mean))+
   geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
   geom_line(aes(color=as.factor(cluster)))
+
+ggplot(class_sum,aes(x=Mon_Flag,y=median))+
+  geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
+  geom_line(aes(color=as.factor(cluster)))
+
+
+class_distinct<-class_ass%>%
+  distinct(pseudo_personid,cluster)
+
+pts_final<-pts%>%
+  select(pseudo_personid,gender,ethnicity,age,sponservice)%>%
+  inner_join(class_distinct,by="pseudo_personid")%>%
+  mutate(sponservice=case_when(sponservice==""~"X",
+                               TRUE ~ paste(sponservice)))
+
+#Gender
+pts_final%>%
+  group_by(cluster,gender)%>%
+  summarise(n=n())%>%
+  mutate(Prop=round(n/sum(n)*100,2))%>%
+  reshape2::dcast(gender~cluster,value.var="Prop")
+
+prop.test(table(pts_final$cluster,pts_final$gender))
+
+#Age
+
+pts_final%>%
+  group_by(cluster)%>%
+  summarise(min=min(age),mean=mean(age),max=max(age))
+
+aov_1<-aov(age~as.factor(cluster),data=pts_final)
+
+summary(aov_1)
+
+TukeyHSD(aov_1)
+
+#Ethnicity
+
+pts_final%>%
+  group_by(cluster,ethnicity)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  #group_by(ethnicity)%>%
+  mutate(Prop=round(n/sum(n)*100,2))%>%
+  reshape2::dcast(ethnicity~cluster,value.var="Prop")
+
+#prop.test(table(pts_final$cluster,pts_final$ethnicity))
+
+
+#BoS
+
+pts_final%>%
+  group_by(cluster,sponservice)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  #group_by(sponservice)%>%
+  mutate(Prop=round(n/sum(n)*100,2))%>%
+  reshape2::dcast(sponservice~cluster,value.var="Prop")
+
+
+
+
 
 
 
