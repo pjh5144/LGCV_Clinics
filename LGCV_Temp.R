@@ -161,6 +161,9 @@ nb_model1<-stepFlexmix(n~(Mon_Flag+prodline)|pseudo_personid,data=sample_df,mode
 getModel(nb_model1)
 getModel(nb_model1)@components
 
+save(nb_model1,file="nb_model1.rda")
+load("nb_model1.rda")
+
 class_ass<-cbind(sample_df,getModel(nb_model1)@cluster)
 class_ass%>%
   distinct(pseudo_personid,`getModel(nb_model1)@cluster`)%>%
@@ -168,6 +171,7 @@ class_ass%>%
   summarise(n=n())%>%
   mutate(prop=n/sum(n))
 
+write.csv(class_ass,file="class_assignments.csv")
 
 zip_model1new<-stepFlexmix(n~prodline+Mon_Flag|pseudo_personid,data=sample_df,model=zip,k=2:7)
 getModel(zip_model1new)@components
