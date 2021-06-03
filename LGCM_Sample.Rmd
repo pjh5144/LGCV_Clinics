@@ -225,14 +225,12 @@ names(class_ass)[5]<-"cluster"
 class_sum<-class_ass%>%
   ungroup()%>%
   group_by(prodline,Mon_Flag,cluster)%>%
-  summarise(min=min(n),max=max(n),mean=mean(n),med=median(n))%>%
-  mutate(cluster=as_factor(cluster))
 
-ggplot(class_sum%>%
-         filter(prodline %in% c("IMSUB","MH","ORTHO","OTHER","PC","SURG")),aes(x=Mon_Flag,y=mean))+
-  geom_point(aes(color=cluster))+facet_wrap(~prodline)+
-  geom_line(aes(color=cluster))+ggtitle("Average Number of Encounters per Month by Cluster")+
-  theme(plot.title = element_text(hjust = 0.5))+xlab("Month Following Injury")+ylab("Average # Encounters")
+  summarise(min=min(n),max=max(n),mean=mean(n),med=median(n))
+
+ggplot(class_sum,aes(x=Mon_Flag,y=mean))+
+  geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
+  geom_line(aes(color=as.factor(cluster)))
 
 # ggplot(class_sum,aes(x=Mon_Flag,y=med))+
 #   geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
