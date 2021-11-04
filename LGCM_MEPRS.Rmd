@@ -1,0 +1,160 @@
+---
+title: "LGCM_MEPRS"
+author: "P. Hoover"
+date: "10/26/2021"
+output: 
+  html_document:
+    keep_md: TRUE
+    includes:
+      in_header: test.html
+    theme: flatly
+    highlight: tango
+---
+
+Below outlines the expansion of the LGCM with the use of MEPRS3. We will attempt to identify and evaluate latent groups among varying healthcare utilization trajectories. 
+
+# Methodology
+
+## Data Sources:
+
+* Direct Care - Inpatient/Outpatient
+* Purchase Care - Inpatient/Outpatient
+
+## Sample Population:
+
+1. Identify those with an initial mTBI within DoD (DC/PC/IN/OUT)
+2. Verify AD status on index date
+3. Verify no more severe dx of TBI within year following index date
+4. Verify HC utilization < -365 & > 365 days since index date (actively using system)
+
+## Analysis:
+
+1. Extract all DC Outpatient encounters 1 year following index mTBI
+2. Map MEPRS 3 to clinic categories (e.g., MH, Neurology/Pain, Physical/Rehab, etc.)
+
+  * Removed any A-Meprs (Inpatient)
+  
+3. For each month following index mTBI, sum total number of encounters specific to each clinic
+4. EDA on current clinic and sample population
+5. Conduct Latent Growth Curve Modeling
+6. Conduct Post-hoc analysis - differences among latent groups 
+
+
+```{r setup, include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r}
+#Libraries
+library(tidyverse)
+library(flexmix)
+library(ggplot2)
+library(kableExtra)
+
+#Functions
+'%ni%'<-Negate('%in%')
+
+grp_prp<-function(df,x){
+  x <- enquo(x)
+  df %>%
+    group_by(!!x)%>%
+    summarise(n=n())%>%
+    mutate(Prop=round(n/sum(n)*100,1))%>%
+    knitr::kable()%>%
+    kableExtra::kable_styling(full_width = F)
+}
+
+grp_prp_2<-function(df,x,y){
+  xx <- enquo(x)
+  yy <- enquo(y)
+  test<-df %>%
+    group_by(!!xx,!!yy)%>%
+    summarise(n=n())%>%
+    mutate(Prop=round(n/sum(n)*100,1))%>%
+    mutate(final=paste(n," (",Prop,")",sep=""))%>%
+    select(-n,-Prop)
+
+  test%>%
+   pivot_wider(id_cols=!!xx,names_from=!!yy,values_from=final)%>%
+    knitr::kable()%>%
+    kableExtra::kable_styling(full_width = F)
+}
+
+#################
+### Load Data ###
+#################
+
+#Pt List 
+pts<-read.csv("/Users/peterhoover/Documents/Analysis_Projects/R_Scripts/LGCV_Clinics/Data/Clean/pts_filtered.csv")
+pts<-pts%>%
+  mutate(age = case_when(pseudo_personid==1262865906 ~ 44.13,
+                         TRUE ~ age))%>%
+  mutate(age_grp = cut(floor(age),breaks=c(0,24,34,44,54,100),
+                       labels=c("17to24","25to34","35to44","45to54","55+"),include.lowest = TRUE))%>%
+  mutate(sponservice_updated = case_when(sponservice %in% c("Air Force","Army","Marines","Navy")~paste(sponservice),
+                                 TRUE ~ paste("Other_Unknown")))%>%
+  mutate(rank_class_updated = case_when(rank_class=="Unknown"|is.na(rank_class)~"Other_Unknown",
+                                TRUE ~ paste(rank_class)))
+
+#pts%>%group_by(age_grp)%>%summarise(min=min(age),max=max(age))
+
+#Clinic Cnts
+clin_long<-read.csv("/Users/peterhoover/Documents/Analysis_Projects/R_Scripts/LGCV_Clinics/Data/Clean/clinic_long.csv")
+
+#Encs
+encs<-read.csv("/Users/peterhoover/Documents/Analysis_Projects/R_Scripts/LGCV_Clinics/Data/Clean/enc_clean.csv")
+```
+
+# Demographics
+
+Sample Population: `r length(unique(pts$pseudo_personid))`
+
+Gender: `r grp_prp(pts,gender)`
+
+Age: `r grp_prp(pts,age_grp)`
+
+Ethnicity: `r grp_prp(pts,ethnicity)`
+
+Service: `r grp_prp(pts,sponservice_updated)`
+
+Rank: `r grp_prp(pts,rank_class_updated)`
+
+# Healthcare Utilization
+
+```{r}
+cnts<-encs%>%
+  group_by(pseudo_personid)%>%
+  summarise(n=n())%>%
+  right_join(pts)%>%
+  mutate_at(vars(n),~replace(.,is.na(.),0))
+
+clin_sum<-clin_long%>%
+  group_by(pseudo_personid,Clinic)%>%
+  summarise(n=sum(n))%>%
+  ungroup()%>%
+  group_by(Clinic)%>%
+  summarise(mean=round(mean(n),2),med=median(n))%>%
+    knitr::kable()%>%
+    kableExtra::kable_styling(full_width = F)
+
+clin_map<-encs%>%group_by(meprs3,Description,Clinic)%>%summarise(n=n())%>%
+  DT::datatable()
+
+```
+
+Total Encounters: `r nrow(encs)`
+
+Average (Med) Encounter: `r paste(round(mean(cnts$n),2)," (",median(cnts$n),")")`
+
+Clinic Summary: `r clin_sum`
+
+Clinic Mappings: `r clin_map`
+
+
+
+
+
+
+
