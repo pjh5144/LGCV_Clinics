@@ -130,8 +130,6 @@ cnts<-encs%>%
   right_join(pts)%>%
   mutate_at(vars(n),~replace(.,is.na(.),0))
 
-
-
 clin_sum<-clin_long%>%
   group_by(pseudo_personid,Clinic)%>%
   summarise(n=sum(n))%>%
