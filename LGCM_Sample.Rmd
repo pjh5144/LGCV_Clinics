@@ -228,7 +228,7 @@ class_sum<-class_ass%>%
 
   summarise(min=min(n),max=max(n),mean=mean(n),med=median(n))
 
-ggplot(class_sum,aes(x=Mon_Flag,y=mean))+
+ggplot(class_sum%>%filter(cluster==1),aes(x=Mon_Flag,y=mean))+
   geom_point(aes(color=as.factor(cluster)))+facet_wrap(~prodline)+
   geom_line(aes(color=as.factor(cluster)))
 
@@ -257,7 +257,7 @@ pts_final%>%
   group_by(cluster,gender)%>%
   summarise(n=n())%>%
   mutate(Prop=round(n/sum(n)*100,2))%>%
-  reshape2::dcast(gender~cluster,value.var="Prop")%>%
+  reshape2::dcast(gender~cluster,value.var="Prop")%>%View()
   kable()%>%kable_styling(full_width=F)
 
 #prop.test(table(pts_final$cluster,pts_final$gender))
@@ -270,7 +270,7 @@ pts_final%>%
 
 pts_final%>%
   group_by(cluster)%>%
-  summarise(min=round(min(age),2),mean=round(mean(age),2),max=round(max(age),1))%>%
+  summarise(min=round(min(age),2),mean=round(mean(age),2),max=round(max(age),1))%>%View()
   kable()%>%kable_styling(full_width=F)
 
 #aov_1<-aov(age~as.factor(cluster),data=pts_final)

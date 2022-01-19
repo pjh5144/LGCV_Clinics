@@ -18,7 +18,6 @@ pts<-data.table::fread("/Users/peterhoover/Documents/Analysis_Projects/Global_da
 encs<-data.table::fread("/Users/peterhoover/Documents/Analysis_Projects/Global_data/cost/clean/tbi_enc_proj.csv")
 
 #Recode prodline (SURGSUB)
-
 encs<-encs%>%
   mutate(prodline = case_when(prodline=="SURGSUB"~ "SURG",
                               TRUE ~ paste(prodline)))

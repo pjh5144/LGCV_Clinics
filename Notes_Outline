@@ -1,0 +1,15 @@
+2.1.21
+
+Objective: Evaluate subtypes of healthcare utilization following an mTBI 
+
+Outline:
+1. Create and establish scripts with current data available
+2. EDA - Verify data types and distributions
+3. Develop scripts to evaluate subgroups  
+    - May need to run on separate computer
+4. Compare subgroups based on demographics
+
+
+To do:
+Evaluate best distribution for type of data
+Ensure model format is correct
